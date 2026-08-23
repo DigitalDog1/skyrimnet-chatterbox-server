@@ -5,7 +5,7 @@
 A self-contained FastAPI server that lets the [SkyrimNet](https://github.com/MinLL/SkyrimNet-GamePlugin)
 SKSE plugin use [Chatterbox Multilingual](https://github.com/resemble-ai/chatterbox)
 as a local TTS engine with **voice cloning** and **emotion control**,
-all on a single 8 GB GPU.
+all on a single 4 GB GPU.
 
 Chatterbox is not in the list of engines shipped with SkyrimNet
 (Piper / PocketTTS / XTTS / ElevenLabs / Inworld / Zonos), and the
