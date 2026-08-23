@@ -30,7 +30,7 @@ Chatterbox-UI на Hugging Face не говорят по проводному п
 ## Требования
 
 - Python 3.10+
-- NVIDIA GPU с ~2 ГБ VRAM (RTX 3060 / 4060 / etc.) и CUDA 11.8 или
+- NVIDIA GPU с ~4 ГБ VRAM и CUDA 11.8 или
   12.x. Режим CPU тоже работает, но 30 секунд диалога на CPU
   займут около 3 минут.
 - [SkyrimNet](https://github.com/MinLL/SkyrimNet-GamePlugin),
