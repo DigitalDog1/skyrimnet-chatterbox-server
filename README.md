@@ -1,3 +1,5 @@
+**English** | [Русский](README.ru.md)
+
 # SkyrimNet Chatterbox TTS Server
 
 A self-contained FastAPI server that lets the [SkyrimNet](https://github.com/MinLL/SkyrimNet-GamePlugin)
