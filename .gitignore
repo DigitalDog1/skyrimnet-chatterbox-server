@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+*.log
+
+# Models and caches
+*.safetensors
+*.bin
+*.pt
+*.onnx
+.cache/
+models/
+voices/
+upload/
+uploads/
+
+# Build / IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local uploads (Windows default) and helper scripts
+C:/Users/
+/tmp/gradio/
+
+# smoke / dev artifacts
+smoke.py
+test_*.py
