@@ -69,32 +69,49 @@ LANG_CODES = {"en", "ru", "zh", "de", "fr", "es", "it", "ja", "ko",
               "he", "hi", "ms", "el", "da", "sw"}
 
 # --- emotion presets -------------------------------------------------------
-# SkyrimNet appends bracketed tags to dialogue text, e.g.
-#   "Run, you fool! [shout]"
-# Chatterbox is a pure acoustic model and would pronounce the tag
-# literally.  Strip the tag and substitute (exaggeration, cfg_weight)
-# values that produce the matching delivery.
+# SkyrimNet's TextProcessor_TagFiltering (in the C++ side) keeps the
+# following tags in the text it sends to the TTS:
+#   angry, fear, surprised, whispering, advertisement, dramatic,
+#   narration, crying, happy, sarcastic, clear throat, sigh, shush,
+#   cough, groan, sniff, gasp, chuckle, laugh
+# Tags can appear anywhere in the line: at the start ([sigh] I suppose...),
+# in the middle (...that? [happy] Incredible!), or inside markdown
+# italics (*[whispering] ...*).  Chatterbox is a pure acoustic model
+# and would pronounce the literal text inside the brackets.  We strip
+# every tag and map the **last** one to (exaggeration, cfg_weight) —
+# the most recent tag is the current delivery intent.
 EMOTION_PRESETS: dict[str, tuple[float, float]] = {
-    # name(s)                : (exag, cfg)
-    "whisper":               (0.25, 0.70),  # quiet, careful
-    "whispering":            (0.25, 0.70),
-    "quiet":                 (0.30, 0.65),
-    "sad":                   (0.40, 0.70),  # low energy, slow
-    "somber":                (0.40, 0.70),
-    "fear":                  (0.70, 0.40),  # nervous, shaky
-    "scared":                (0.70, 0.40),
-    "terrified":             (0.85, 0.35),
-    "angry":                 (0.75, 0.35),  # harsh, intense
-    "dramatic":              (0.75, 0.35),  # theatrical, broad
-    "shout":                 (0.85, 0.30),  # loud, free
-    "yelling":               (0.85, 0.30),
-    "scream":                (0.95, 0.25),
-    "happy":                 (0.60, 0.45),  # light, upbeat
-    "cheerful":              (0.60, 0.45),
-    "laugh":                 (0.65, 0.40),
-    "laughing":              (0.65, 0.40),
-    "sarcastic":             (0.55, 0.55),  # controlled, dry
-    "neutral":               (0.50, 0.50),
+    # name(s)                     : (exag, cfg)
+    "whisper":                    (0.25, 0.70),  # quiet, careful
+    "whispering":                 (0.25, 0.70),
+    "quiet":                      (0.30, 0.65),
+    "shush":                      (0.25, 0.70),
+    "sad":                        (0.40, 0.70),  # low energy
+    "sigh":                       (0.40, 0.70),  # delivery cue, treat like sad
+    "crying":                     (0.45, 0.65),
+    "groan":                      (0.45, 0.65),
+    "sniff":                      (0.45, 0.60),
+    "cough":                      (0.50, 0.55),
+    "angry":                      (0.75, 0.35),  # harsh, intense
+    "shout":                      (0.85, 0.30),  # loud
+    "yelling":                    (0.85, 0.30),
+    "scream":                     (0.95, 0.25),
+    "fear":                       (0.70, 0.40),  # nervous, shaky
+    "scared":                     (0.70, 0.40),
+    "terrified":                  (0.85, 0.35),
+    "surprised":                  (0.65, 0.40),
+    "gasp":                       (0.70, 0.40),
+    "happy":                      (0.60, 0.45),  # light, upbeat
+    "cheerful":                   (0.60, 0.45),
+    "laugh":                      (0.65, 0.40),
+    "laughing":                   (0.65, 0.40),
+    "chuckle":                    (0.55, 0.50),  # lighter than laugh
+    "dramatic":                   (0.75, 0.35),  # theatrical
+    "narration":                  (0.55, 0.55),  # calm storyteller
+    "sarcastic":                  (0.55, 0.55),  # controlled, dry
+    "advertisement":              (0.65, 0.45),  # upbeat announcer
+    "clear throat":               (0.50, 0.60),  # neutral delivery cue
+    "neutral":                    (0.50, 0.50),
 }
 
 # --- model loading (single-shot) -------------------------------------------
@@ -198,25 +215,54 @@ def _sniff_args(data: list) -> tuple[str, str, str | None, float, float, float]:
 
 def _apply_emotion_tag(text: str, base_exag: float,
                        base_cfg: float) -> tuple[str, float, float]:
-    """Strip a trailing `[emotion]` tag from the text and substitute
-    the matching (exaggeration, cfg_weight) preset.  If no tag is
-    present, return the input values unchanged.
+    """Strip every `[emotion]` tag from `text` and substitute the
+    (exaggeration, cfg_weight) preset for the **last** tag found —
+    that is the most recent delivery intent.  If no tag is present,
+    the input values are returned unchanged.
+
+    Tags are stripped from anywhere in the string (start, middle,
+    end) and may include spaces, e.g. `[clear throat]`.  Markdown
+    italics around the whole phrase (`*[whispering] ...*`) are also
+    tolerated.
     """
-    m = re.search(r"\s*\[([a-zA-Z_]+)\]\s*\.?\s*$", text)
-    if not m:
+    # Match any [tag] anywhere — allow letters, digits, underscore, spaces.
+    # We do not match a tag that contains a closing bracket (nested).
+    tag_re = re.compile(r"\*?\[([a-zA-Z][a-zA-Z_ ]{0,30})\]\*?")
+    matches = list(tag_re.finditer(text))
+    if not matches:
         return text, base_exag, base_cfg
-    tag = m.group(1).lower()
-    cleaned = text[:m.start()].rstrip()
+    # Strip all tags.
+    cleaned = tag_re.sub("", text)
+    # Tidy up whitespace and stray punctuation left behind.
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r"\s+([.,!?;])", r"\1", cleaned)
+    # Strip markdown italics that often wrap a tagged line, e.g.
+    #   *[whispering] hello.*
+    # The leading '*' was consumed by the tag regex; the trailing '*'
+    # may still be there.
+    cleaned = re.sub(r"\*\s*$", "", cleaned)
+    cleaned = re.sub(r"^\s*\*", "", cleaned)
+    cleaned = re.sub(r"\*\s*\*", "", cleaned)
+    # Collapse leftover doubled spaces from the strip.
+    cleaned = re.sub(r"[ \t]+", " ", cleaned).strip()
+    if not cleaned:
+        # Tags with no real text (e.g. *[whispering]*) — fall back to
+        # the tag itself as filler so the model has something to say.
+        cleaned = "."
+    # The last tag is the current delivery.
+    tag = matches[-1].group(1).lower().strip()
     if tag not in EMOTION_PRESETS:
-        return text, base_exag, base_cfg
+        return cleaned, base_exag, base_cfg
     ex, cf = EMOTION_PRESETS[tag]
-    # Only override when SkyrimNet's defaults are flat (0.35/0.35);
+    # Only override when SkyrimNet's defaults are flat (≤ 0.45);
     # if the user raised them globally, keep their values.
     if base_exag <= 0.45 and base_cfg <= 0.45:
-        print(f"[server] emotion tag [{tag}] -> exag={ex:.2f} cfg={cf:.2f} "
+        print(f"[server] emotion tag(s) {[m.group(1) for m in matches]} -> "
+              f"using last [{tag}], exag={ex:.2f} cfg={cf:.2f} "
               f"(overrode {base_exag:.2f}/{base_cfg:.2f})", flush=True)
         return cleaned, ex, cf
-    print(f"[server] emotion tag [{tag}] detected, kept SkyrimNet "
+    print(f"[server] emotion tag(s) {[m.group(1) for m in matches]} -> "
+          f"using last [{tag}], kept SkyrimNet "
           f"exag={base_exag:.2f} cfg={base_cfg:.2f} (user-tuned)", flush=True)
     return cleaned, base_exag, base_cfg
 
