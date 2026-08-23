@@ -6,7 +6,7 @@
 [SkyrimNet](https://github.com/MinLL/SkyrimNet-GamePlugin) использовать
 [Chatterbox Multilingual](https://github.com/resemble-ai/chatterbox)
 как локальный TTS-движок с **клонированием голоса** и **контролем
-эмоций** — всё на одной GPU на 8 ГБ.
+эмоций** — всё на одной GPU на 4 ГБ.
 
 Chatterbox нет в списке движков, поставляемых с SkyrimNet
 (Piper / PocketTTS / XTTS / ElevenLabs / Inworld / Zonos), а generic'овые
