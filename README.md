@@ -28,7 +28,7 @@ This project bridges the two.
 ## Requirements
 
 - Python 3.10+
-- An NVIDIA GPU with ~2 GB of VRAM (RTX 3060 / 4060 / etc.) and
+- An NVIDIA GPU with ~4 GB of VRAM and
   CUDA 11.8 or 12.x.  CPU mode also works, but a 30-second dialogue
   takes about 3 minutes on CPU.
 - [SkyrimNet](https://github.com/MinLL/SkyrimNet-GamePlugin) installed
